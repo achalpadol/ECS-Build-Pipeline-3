@@ -67,7 +67,7 @@ pipeline {
                 script {
 
                     deployToECS(
-                        './frontend/frontend-task-definition.json',
+                        './frontend/proxy-task-definition.json',
                         'dev-frontend',
                         'dev-frontend-service'
                     )
