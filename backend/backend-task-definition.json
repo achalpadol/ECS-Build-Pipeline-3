@@ -1,0 +1,50 @@
+{
+  "family": "dev-backend",
+  "containerDefinitions": [
+    {
+      "name": "backend",
+      "image": "552940445807.dkr.ecr.ap-south-1.amazonaws.com/app3-backend-${ENV}:${COMMIT_ID}",
+      "essential": true,
+      "portMappings": [
+        {
+          "containerPort": 8080,
+          "hostPort": 8080,
+          "protocol": "tcp"
+        }
+      ],
+      "environment": [
+        {
+          "name": "MYSQL_DATABASE",
+          "value": "example"
+        },
+        {
+          "name": "MYSQL_HOST",
+          "value": "db.ecs.dev.local"
+        },
+        {
+          "name": "MYSQL_ROOT_PASSWORD",
+          "value": "Achal123"
+        },
+        {
+          "name": "MYSQL_USER",
+          "value": "root"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/app3-backend-task-definition",
+          "awslogs-region": "ap-south-1",
+          "awslogs-stream-prefix": "backend"
+        }
+      }
+    }
+  ],
+  "executionRoleArn": "arn:aws:iam::552940445807:role/ecsTaskExecutionRole",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": [
+    "FARGATE"
+  ],
+  "cpu": "256",
+  "memory": "512"
+}

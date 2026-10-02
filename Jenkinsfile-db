@@ -1,0 +1,164 @@
+pipeline {
+
+    agent any
+
+    environment {
+
+        AWS_REGION = 'ap-south-1'
+        AWS_ACCOUNT_ID = '552940445807'
+
+        ECR_REGISTRY =
+            "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+
+        ECR_REGISTRY_URL =
+            "https://${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+
+        ECS_CLUSTER = 'dev-app-cluster'
+
+        DATABASE_IMAGE_DEV = 'app3-db-dev'
+
+        AWS_CREDENTIALS = 'aws'
+
+        BUILD_CONTEXT = './db'
+        DATABASE_DOCKERFILE = './db/Dockerfile'
+    }
+
+    parameters {
+
+        choice(
+            name: 'Environment',
+            choices: ['dev', 'qa', 'uat', 'prod'],
+            description: 'Select the deployment environment'
+        )
+    }
+
+    stages {
+
+        stage('Dev - Build & Push Database') {
+
+            when {
+                expression {
+                    params.Environment == 'dev'
+                }
+            }
+
+            steps {
+
+                script {
+
+                    buildAndPush(
+                        "${env.DATABASE_IMAGE_DEV}",
+                        "${env.BUILD_CONTEXT}"
+                    )
+                }
+            }
+        }
+
+        stage('Deploy DB') {
+
+            when {
+                expression {
+                    params.Environment == 'dev'
+                }
+            }
+
+            steps {
+
+                script {
+
+                    deployToECS(
+                        './db/db-task-definition.json',
+                        'dev-db',
+                        'dev-db-service'
+                    )
+                }
+            }
+        }
+    }
+
+    post {
+
+        always {
+            deleteDir()
+        }
+    }
+}
+
+
+def buildAndPush(
+    String DATABASE_IMAGE,
+    String BUILD_CONTEXT
+) {
+
+    def IMAGE_URI =
+        "${env.ECR_REGISTRY}/${DATABASE_IMAGE}:${env.GIT_COMMIT}"
+
+    echo "Building image:"
+    echo "${IMAGE_URI}"
+
+    def image = docker.build(
+        IMAGE_URI,
+        "-f ${env.DATABASE_DOCKERFILE} ${BUILD_CONTEXT}"
+    )
+
+    docker.withRegistry(
+        "${env.ECR_REGISTRY_URL}",
+        "ecr:${env.AWS_REGION}:${env.AWS_CREDENTIALS}"
+    ) {
+
+        image.push()
+    }
+}
+
+
+def deployToECS(
+    String taskDefinitionFile,
+    String taskFamily,
+    String ecsService
+) {
+
+    def environment = params.Environment
+    def commitId = env.GIT_COMMIT
+    def region = env.AWS_REGION
+    def cluster = env.ECS_CLUSTER
+
+    echo "Environment: ${environment}"
+    echo "Commit: ${commitId}"
+
+    sh """
+        sed -i 's|\\\${ENV}|${environment}|g' ${taskDefinitionFile}
+
+        sed -i 's|\\\${COMMIT_ID}|${commitId}|g' ${taskDefinitionFile}
+    """
+
+    echo "Task definition after image replacement:"
+
+    sh """
+        grep '"image"' ${taskDefinitionFile}
+    """
+
+    echo "Registering ECS task definition..."
+
+    def taskRevision = sh(
+        script: """
+            aws ecs register-task-definition \
+                --cli-input-json file://${taskDefinitionFile} \
+                --region ${region} \
+                --query 'taskDefinition.revision' \
+                --output text
+        """,
+        returnStdout: true
+    ).trim()
+
+    echo "Task definition revision: ${taskRevision}"
+
+    echo "Updating ECS service..."
+
+    sh """
+        aws ecs update-service \
+            --cluster ${cluster} \
+            --service ${ecsService} \
+            --task-definition ${taskFamily}:${taskRevision} \
+            --region ${region}
+    """
+}

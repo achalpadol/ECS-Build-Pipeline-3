@@ -1,0 +1,188 @@
+pipeline {
+
+    agent any
+
+    environment {
+
+        AWS_REGION = 'ap-south-1'
+        AWS_ACCOUNT_ID = '552940445807'
+
+        ECR_REGISTRY =
+            "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+
+        ECR_REGISTRY_URL =
+            "https://${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+
+        ECS_CLUSTER = 'dev-app-cluster'
+
+        BACKEND_IMAGE_DEV = 'app3-backend-dev'
+
+        AWS_CREDENTIALS = 'aws'
+
+        BUILD_CONTEXT = './backend'
+        BACKEND_DOCKERFILE = './backend/Dockerfile'
+    }
+
+    parameters {
+
+        choice(
+            name: 'Environment',
+            choices: ['dev', 'qa', 'uat', 'prod'],
+            description: 'Select the deployment environment'
+        )
+    }
+
+    stages {
+
+        stage('Dev - Build & Push Backend') {
+
+            when {
+                expression {
+                    params.Environment == 'dev'
+                }
+            }
+
+            steps {
+
+                script {
+
+                    buildAndPush(
+                        env.BACKEND_IMAGE_DEV,
+                        env.BUILD_CONTEXT
+                    )
+                }
+            }
+        }
+
+        stage('Deploy Backend') {
+
+            when {
+                expression {
+                    params.Environment == 'dev'
+                }
+            }
+
+            steps {
+
+                script {
+
+                    deployToECS(
+                        './backend/backend-task-definition.json',
+                        'dev-backend',
+                        'dev-backend-service'
+                    )
+                }
+            }
+        }
+    }
+
+    post {
+
+        always {
+            deleteDir()
+        }
+    }
+}
+
+
+def buildAndPush(
+    String BACKEND_IMAGE,
+    String BUILD_CONTEXT
+) {
+
+    def IMAGE_URI =
+        "${env.ECR_REGISTRY}/${BACKEND_IMAGE}:${env.GIT_COMMIT}"
+
+    echo "======================================"
+    echo "Building Backend Image"
+    echo "======================================"
+
+    echo "Image: ${IMAGE_URI}"
+
+    def image = docker.build(
+        IMAGE_URI,
+        "-f ${env.BACKEND_DOCKERFILE} ${BUILD_CONTEXT}"
+    )
+
+    echo "======================================"
+    echo "Pushing Backend Image to ECR"
+    echo "======================================"
+
+    docker.withRegistry(
+        "${env.ECR_REGISTRY_URL}",
+        "ecr:${env.AWS_REGION}:${env.AWS_CREDENTIALS}"
+    ) {
+
+        image.push()
+    }
+
+    echo "Backend image pushed successfully."
+}
+
+
+def deployToECS(
+    String taskDefinitionFile,
+    String taskFamily,
+    String ecsService
+) {
+
+    def environment = params.Environment
+    def commitId = env.GIT_COMMIT
+    def region = env.AWS_REGION
+    def cluster = env.ECS_CLUSTER
+
+    echo "======================================"
+    echo "Deploying Backend to ECS"
+    echo "======================================"
+
+    echo "Environment: ${environment}"
+    echo "Commit: ${commitId}"
+    echo "Cluster: ${cluster}"
+    echo "Service: ${ecsService}"
+    echo "Task Family: ${taskFamily}"
+
+    sh """
+        sed -i 's|\\\${ENV}|${environment}|g' ${taskDefinitionFile}
+
+        sed -i 's|\\\${COMMIT_ID}|${commitId}|g' ${taskDefinitionFile}
+    """
+
+    echo "======================================"
+    echo "Image in Task Definition"
+    echo "======================================"
+
+    sh """
+        grep '"image"' ${taskDefinitionFile}
+    """
+
+    echo "======================================"
+    echo "Registering ECS Task Definition"
+    echo "======================================"
+
+    def taskRevision = sh(
+        script: """
+            aws ecs register-task-definition \
+                --cli-input-json file://${taskDefinitionFile} \
+                --region ${region} \
+                --query 'taskDefinition.revision' \
+                --output text
+        """,
+        returnStdout: true
+    ).trim()
+
+    echo "New Task Definition Revision: ${taskRevision}"
+
+    echo "======================================"
+    echo "Updating ECS Service"
+    echo "======================================"
+
+    sh """
+        aws ecs update-service \
+            --cluster ${cluster} \
+            --service ${ecsService} \
+            --task-definition ${taskFamily}:${taskRevision} \
+            --region ${region}
+    """
+
+    echo "Backend ECS service updated successfully."
+}
