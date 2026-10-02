@@ -42,7 +42,7 @@ FROM nginx:1.13-alpine
 RUN apk add --no-cache gettext
 
 COPY --from=build /code/build /usr/share/nginx/html
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY conf/nginx.conf /etc/nginx/conf.d/default.conf
 COPY docker-entrypoint.sh /docker-entrypoint.sh
 
 RUN chmod +x /docker-entrypoint.sh
