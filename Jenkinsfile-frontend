@@ -185,11 +185,9 @@ def promoteImage(
     String sourceImage,
     String targetImage
 ) {
-    def SOURCE_IMAGE_URI =
-        "${env.ECR_REGISTRY}/${sourceImage}:${env.GIT_COMMIT}"
-
-    def TARGET_IMAGE_URI =
-        "${env.ECR_REGISTRY}/${targetImage}:${env.GIT_COMMIT}"
+    def IMAGE_TAG = params.IMAGE_TAG
+    def SOURCE_IMAGE_URI = "${env.ECR_REGISTRY}/${sourceImage}:${env.GIT_COMMIT}"
+    def TARGET_IMAGE_URI = "${env.ECR_REGISTRY}/${targetImage}:${env.GIT_COMMIT}"
 
     echo "Source image:"
     echo "${SOURCE_IMAGE_URI}"
