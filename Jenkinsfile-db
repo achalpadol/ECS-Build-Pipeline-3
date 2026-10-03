@@ -127,7 +127,7 @@ pipeline {
         stage('Deploy DB') {
             when {
                 expression {
-                    params.Environment == 'dev'
+                    params.Environment == 'qa'
                 }
             }
             steps {
