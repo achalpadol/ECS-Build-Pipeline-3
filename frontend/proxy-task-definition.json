@@ -12,6 +12,12 @@
           "protocol": "tcp"
         }
       ],
+      "environment": [
+        {
+          "name": "BACKEND_HOST",
+          "value": "app1-backend.ecs.employee.local"
+        }
+      ]
       "logConfiguration": {
         "logDriver": "awslogs",
         "options": {
