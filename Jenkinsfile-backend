@@ -28,10 +28,10 @@ pipeline {
             description: 'Select the deployment environment'
         )
     }
-    string(
-        name: 'IMAGE_TAG',
-        defaultValue: '',
-        description: 'Existing DEV image tag to promote. Required for QA/UAT/PROD.'
+        string(
+            name: 'IMAGE_TAG',
+            defaultValue: '',
+            description: 'Existing DEV image tag to promote. Required for QA/UAT/PROD.'
     )
 
     stages {
