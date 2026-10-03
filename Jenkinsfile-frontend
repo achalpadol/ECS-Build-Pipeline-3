@@ -186,8 +186,8 @@ def promoteImage(
     String targetImage
 ) {
     def IMAGE_TAG = params.IMAGE_TAG
-    def SOURCE_IMAGE_URI = "${env.ECR_REGISTRY}/${sourceImage}:${env.GIT_COMMIT}"
-    def TARGET_IMAGE_URI = "${env.ECR_REGISTRY}/${targetImage}:${env.GIT_COMMIT}"
+    def SOURCE_IMAGE_URI = "${env.ECR_REGISTRY}/${sourceImage}:${IMAGE_TAG}"
+    def TARGET_IMAGE_URI = "${env.ECR_REGISTRY}/${targetImage}:${IMAGE_TAG}"
 
     echo "Source image:"
     echo "${SOURCE_IMAGE_URI}"
@@ -239,20 +239,36 @@ def deployToECS(
     String ecsService
 ) {
     def environment = params.Environment
-    def commitId    = env.GIT_COMMIT
+    def imageTag    = params.IMAGE_TAG ?: env.GIT_COMMIT
     def region      = env.AWS_REGION
     def cluster     = getECSCluster(environment)
 
-    // Replace environment
+    def taskDefinitionTemp = "${env.WORKSPACE}/task-definition-${environment}.json"
+
+    echo "Environment = ${environment}"
+    echo "Image Tag   = ${imageTag}"
+    echo "Cluster     = ${cluster}"
+    echo "Task Family = ${taskFamily}"
+    echo "ECS Service = ${ecsService}"
+
+    // Create a fresh copy
     sh """
-        sed -i 's|\\\${ENV}|${environment}|g' ${taskDefinitionFile}
-        sed -i 's|\\\${COMMIT_ID}|${commitId}|g' ${taskDefinitionFile}
+        cp ${taskDefinitionFile} ${taskDefinitionTemp}
+
+        sed -i 's|\\\${ENV}|${environment}|g' ${taskDefinitionTemp}
+        sed -i 's|\\\${COMMIT_ID}|${imageTag}|g' ${taskDefinitionTemp}
     """
 
-    echo "Task definition after image replacement:"
+    echo "Database host after replacement:"
 
     sh """
-        grep '"image"' ${taskDefinitionFile}
+        grep -A1 '"name": "MYSQL_HOST"' ${taskDefinitionTemp}
+    """
+
+    echo "Image after replacement:"
+
+    sh """
+        grep '"image"' ${taskDefinitionTemp}
     """
 
     echo "Registering ECS task definition..."
@@ -260,7 +276,7 @@ def deployToECS(
     def taskRevision = sh(
         script: """
             aws ecs register-task-definition \
-                --cli-input-json file://${taskDefinitionFile} \
+                --cli-input-json file://${taskDefinitionTemp} \
                 --region ${region} \
                 --query 'taskDefinition.revision' \
                 --output text
@@ -269,6 +285,7 @@ def deployToECS(
     ).trim()
 
     echo "Task definition revision: ${taskRevision}"
+
     echo "Updating ECS service..."
 
     sh """
@@ -281,8 +298,6 @@ def deployToECS(
 
     echo "ECS deployment completed successfully."
 }
-
-
 // FUNCTION 4 - GET ECS CLUSTER
 def getECSCluster(String environment)
 {
