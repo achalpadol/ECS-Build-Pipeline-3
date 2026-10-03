@@ -1,112 +1,165 @@
 pipeline {
-
     agent any
-
     environment {
+        AWS_REGION       = 'ap-south-1'
+        AWS_ACCOUNT_ID   = '552940445807'
+        ECR_REGISTRY     = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+        ECR_REGISTRY_URL = "https://${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
 
-        AWS_REGION = 'ap-south-1'
-        AWS_ACCOUNT_ID = '552940445807'
+        // Frontend images
+        FRONTEND_IMAGE_DEV  = 'app3-frontend-dev'
+        FRONTEND_IMAGE_QA   = 'app3-frontend-qa'
+        FRONTEND_IMAGE_UAT  = 'app3-frontend-uat'
+        FRONTEND_IMAGE_PROD = 'app3-frontend-prod'
 
-        ECR_REGISTRY =
-            "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
-
-        ECR_REGISTRY_URL =
-            "https://${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
-
-        ECS_CLUSTER = 'dev-app-cluster'
-
-        FRONTEND_IMAGE_DEV = 'app3-frontend-dev'
-
+        // AWS credentials
         AWS_CREDENTIALS = 'aws'
 
+        // Frontend Docker build context
         BUILD_CONTEXT = './frontend'
         FRONTEND_DOCKERFILE = './frontend/Dockerfile'
     }
-
     parameters {
-
         choice(
             name: 'Environment',
             choices: ['dev', 'qa', 'uat', 'prod'],
             description: 'Select the deployment environment'
         )
     }
+    stage('Get ECS Cluster') {
+        steps {
+            script {
+                env.ECS_CLUSTER = getECSCluster(params.Environment)
+                echo "ECS_CLUSTER = ${env.ECS_CLUSTER}"
+            }
+        }
+    }
 
     stages {
-
+        // DEV - BUILD & PUSH
         stage('Dev - Build & Push Frontend') {
-
             when {
                 expression {
                     params.Environment == 'dev'
                 }
             }
-
             steps {
-
                 script {
-
                     buildAndPush(
-                        env.FRONTEND_IMAGE_DEV,
-                        env.BUILD_CONTEXT
+                        "${env.FRONTEND_IMAGE_DEV}",
+                        "${env.BUILD_CONTEXT}"
                     )
                 }
             }
         }
-
+        // QA - PROMOTE IMAGE
+        stage('QA - Promote Frontend Image') {
+            when {
+                expression {
+                    params.Environment == 'qa'
+                }
+            }
+            steps {
+                script {
+                    promoteImage(
+                        "${env.FRONTEND_IMAGE_DEV}",
+                        "${env.FRONTEND_IMAGE_QA}"
+                    )
+                }
+            }
+        }
+        // UAT - PROMOTE IMAGE
+        stage('UAT - Promote Frontend Image') {
+            when {
+                expression {
+                    params.Environment == 'uat'
+                }
+            }
+            steps {
+                script {
+                    promoteImage(
+                        "${env.FRONTEND_IMAGE_DEV}",
+                        "${env.FRONTEND_IMAGE_UAT}"
+                    )
+                }
+            }
+        }
+        // PROD APPROVAL
+        stage('Production Approval') {
+            when {
+                expression {
+                    params.Environment == 'prod'
+                }
+            }
+            steps {
+                input(
+                    message: 'Promote Frontend image to PROD?',
+                    ok: 'Approve Production Deployment'
+                )
+            }
+        }
+        // PROD - PROMOTE IMAGE
+        stage('PROD - Promote Frontend Image') {
+            when {
+                expression {
+                    params.Environment == 'prod'
+                }
+            }
+            steps {
+                script {
+                    promoteImage(
+                        "${env.FRONTEND_IMAGE_DEV}",
+                        "${env.FRONTEND_IMAGE_PROD}"
+                    )
+                }
+            }
+        }
+        // DEPLOY FRONTEND
         stage('Deploy Frontend') {
-
             when {
                 expression {
                     params.Environment == 'dev'
                 }
             }
-
             steps {
-
                 script {
-
                     deployToECS(
+<<<<<<< HEAD
                         './frontend/proxy-task-definition.json',
                         'dev-frontend',
                         'dev-frontend-service'
+=======
+                        './frontend/frontend-task-definition.json',
+                        getTaskFamily(environment)
+                        getECSService(environment)
+>>>>>>> f73fa98 (file added)
                     )
                 }
             }
         }
     }
-
+    // POST
     post {
-
         always {
             deleteDir()
         }
     }
 }
-
-
+// FUNCTION 1 - BUILD AND PUSH FRONTEND IMAGE
 def buildAndPush(
     String FRONTEND_IMAGE,
     String BUILD_CONTEXT
 ) {
-
     def IMAGE_URI =
         "${env.ECR_REGISTRY}/${FRONTEND_IMAGE}:${env.GIT_COMMIT}"
 
-    echo "======================================"
-    echo "Building Frontend Image"
-    echo "======================================"
-
-    echo "Image: ${IMAGE_URI}"
+    echo "Building image:"
+    echo "${IMAGE_URI}"
 
     def image = docker.build(
         IMAGE_URI,
         "-f ${env.FRONTEND_DOCKERFILE} ${BUILD_CONTEXT}"
     )
-
-    echo "======================================"
-    echo "Pushing Frontend Image to ECR"
-    echo "======================================"
 
     docker.withRegistry(
         "${env.ECR_REGISTRY_URL}",
@@ -115,49 +168,75 @@ def buildAndPush(
 
         image.push()
     }
-
-    echo "Frontend image pushed successfully."
 }
-
-
-def deployToECS(
-    String taskDefinitionFile,
-    String taskFamily,
-    String ecsService
+// FUNCTION 2 - PROMOTE FRONTEND IMAGE
+def promoteImage(
+    String sourceImage,
+    String targetImage
 ) {
+    def SOURCE_IMAGE_URI =
+        "${env.ECR_REGISTRY}/${sourceImage}:${env.GIT_COMMIT}"
 
+    def TARGET_IMAGE_URI =
+        "${env.ECR_REGISTRY}/${targetImage}:${env.GIT_COMMIT}"
+
+    echo "Source image:"
+    echo "${SOURCE_IMAGE_URI}"
+
+    echo "Target image:"
+    echo "${TARGET_IMAGE_URI}"
+
+    // Pull source image from ECR
+    echo "Pulling source frontend image..."
+
+    docker.withRegistry(
+        "${env.ECR_REGISTRY_URL}",
+        "ecr:${env.AWS_REGION}:${env.AWS_CREDENTIALS}"
+    ) {
+        docker.image(
+            SOURCE_IMAGE_URI
+        ).pull()
+    }
+
+    // Tag image for target environment
+    echo "Tagging image for target environment..."
+    sh """
+        docker tag \
+        ${SOURCE_IMAGE_URI} \
+        ${TARGET_IMAGE_URI}
+    """
+    // Push target image to ECR
+    echo "Pushing target frontend image..."
+    docker.withRegistry(
+        "${env.ECR_REGISTRY_URL}",
+        "ecr:${env.AWS_REGION}:${env.AWS_CREDENTIALS}"
+    ) {
+        docker.image(
+            TARGET_IMAGE_URI
+        ).push()
+    }
+    echo "Frontend image promoted successfully."
+}
+// FUNCTION 3 - TASK DEFINITION FUNCTION
+def deployToECS(String taskDefinitionFile)
+ {
     def environment = params.Environment
-    def commitId = env.GIT_COMMIT
-    def region = env.AWS_REGION
-    def cluster = env.ECS_CLUSTER
+    def commitId    = env.GIT_COMMIT
+    def region      = env.AWS_REGION
+    def cluster     = getECSCluster(environment)
+    def taskFamily  = getTaskFamily(environment)
+    def ecsService  = getECSService(environment)
 
-    echo "======================================"
-    echo "Deploying Frontend to ECS"
-    echo "======================================"
-
-    echo "Environment: ${environment}"
-    echo "Commit: ${commitId}"
-    echo "Cluster: ${cluster}"
-    echo "Service: ${ecsService}"
-    echo "Task Family: ${taskFamily}"
-
+    // Replace environment
     sh """
         sed -i 's|\\\${ENV}|${environment}|g' ${taskDefinitionFile}
-
         sed -i 's|\\\${COMMIT_ID}|${commitId}|g' ${taskDefinitionFile}
     """
-
-    echo "======================================"
-    echo "Image in Task Definition"
-    echo "======================================"
-
+    echo "Task definition after image replacement:"
     sh """
         grep '"image"' ${taskDefinitionFile}
     """
-
-    echo "======================================"
-    echo "Registering ECS Task Definition"
-    echo "======================================"
+    echo "Registering ECS task definition..."
 
     def taskRevision = sh(
         script: """
@@ -170,11 +249,8 @@ def deployToECS(
         returnStdout: true
     ).trim()
 
-    echo "New Task Definition Revision: ${taskRevision}"
-
-    echo "======================================"
-    echo "Updating ECS Service"
-    echo "======================================"
+    echo "Task definition revision: ${taskRevision}"
+    echo "Updating ECS service..."
 
     sh """
         aws ecs update-service \
@@ -183,6 +259,44 @@ def deployToECS(
             --task-definition ${taskFamily}:${taskRevision} \
             --region ${region}
     """
+<<<<<<< HEAD
 
     echo "Frontend ECS service updated successfully."
 }
+=======
+    echo "ECS deployment completed successfully."
+}
+// FUNCTION 4 - GET ECS CLUSTER
+def getECSCluster(String environment)
+ {
+    def clusters = [
+        dev  : 'dev-app-cluster',
+        qa   : 'qa-app-cluster',
+        uat  : 'uat-app-cluster',
+        prod : 'prod-app-cluster'
+    ]
+    return clusters[environment]
+}
+// FUNCTION 5 - GET TASK FAMILY
+def getTaskFamily(String environment)
+ {
+    def taskFamilies = [
+        dev  : 'dev-frontend',
+        qa   : 'qa-frontend',
+        uat  : 'uat-frontend',
+        prod : 'prod-frontend'
+    ]
+    return taskFamilies[environment]
+}
+// FUNCTION 6 - GET ECS SERVICE
+def getECSService(String environment)
+ {
+    def services = [
+        dev  : 'dev-frontend-service',
+        qa   : 'qa-frontend-service',
+        uat  : 'uat-frontend-service',
+        prod : 'prod-frontend-service'
+    ]
+    return services[environment]
+}
+>>>>>>> f73fa98 (file added)

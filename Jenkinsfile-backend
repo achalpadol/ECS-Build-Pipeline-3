@@ -1,71 +1,117 @@
 pipeline {
-
     agent any
-
     environment {
+        AWS_REGION       = 'ap-south-1'
+        AWS_ACCOUNT_ID   = '552940445807'
+        ECR_REGISTRY     = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+        ECR_REGISTRY_URL = "https://${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
 
-        AWS_REGION = 'ap-south-1'
-        AWS_ACCOUNT_ID = '552940445807'
+         // Backend images
+        BACKEND_IMAGE_DEV  = 'app3-backend-dev'
+        BACKEND_IMAGE_QA   = 'app3-backend-qa'
+        BACKEND_IMAGE_UAT  = 'app3-backend-uat'
+        BACKEND_IMAGE_PROD = 'app3-backend-prod'
 
-        ECR_REGISTRY =
-            "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
-
-        ECR_REGISTRY_URL =
-            "https://${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
-
-        ECS_CLUSTER = 'dev-app-cluster'
-
-        BACKEND_IMAGE_DEV = 'app3-backend-dev'
-
+        // AWS credentials
         AWS_CREDENTIALS = 'aws'
-
+        // Backend Docker build context
         BUILD_CONTEXT = './backend'
-        BACKEND_DOCKERFILE = './backend/Dockerfile'
+        BACKEND_DOCKERFILE = './db/backend'
     }
-
     parameters {
-
         choice(
             name: 'Environment',
             choices: ['dev', 'qa', 'uat', 'prod'],
             description: 'Select the deployment environment'
         )
     }
-
     stages {
-
         stage('Dev - Build & Push Backend') {
-
             when {
                 expression {
                     params.Environment == 'dev'
                 }
             }
-
             steps {
-
                 script {
-
                     buildAndPush(
-                        env.BACKEND_IMAGE_DEV,
-                        env.BUILD_CONTEXT
+                        "${env.BACKEND_IMAGE_DEV}",
+                        "${env.BUILD_CONTEXT}"
                     )
                 }
             }
         }
-
+        // promote image to qa
+        stage('QA - Promote Backend Image') {
+            when {
+                expression {
+                    params.Environment == 'qa'
+                }
+            }
+            steps {
+                script {
+                    promoteImage(
+                        "${env.BACKEND_IMAGE_DEV}",
+                        "${env.BACKEND_IMAGE_QA}"
+                    )
+                }
+            }
+        }
+        //promote image to uat
+         stage('UAT - Promote Database Image') {
+            when {
+                expression {
+                    params.Environment == 'uat'
+                }
+            }
+            steps {
+                script {
+                    promoteImage(
+                        "${env.BACKEND_IMAGE_DEV}",
+                        "${env.BACKEND_IMAGE_UAT}"
+                    )
+                }
+            }
+        }
+        //Prod Approval
+        stage('Production Approval') {
+            when {
+                expression {
+                    params.Environment == 'prod'
+                }
+            }
+            steps {
+                input(
+                    message: 'Promote Backend image to PROD?',
+                    ok: 'Approve Production Deployment'
+                )
+            }
+        }
+        //Promote image to prod
+         stage('PROD - Promote Backend Image') {
+            when {
+                expression {
+                    params.Environment == 'prod'
+                }
+            }
+            steps {
+                script {
+                    promoteImage(
+                        "${env.BACKEND_IMAGE_DEV}",
+                        "${env.BACKEND_IMAGE_PROD}"
+                    )
+                }
+            }
+        } 
+        //Deploy to Backend
         stage('Deploy Backend') {
-
             when {
                 expression {
                     params.Environment == 'dev'
                 }
             }
-
             steps {
-
                 script {
-
                     deployToECS(
                         './backend/backend-task-definition.json',
                         'dev-backend',
@@ -75,16 +121,15 @@ pipeline {
             }
         }
     }
-
+    //post
     post {
-
         always {
             deleteDir()
         }
     }
 }
 
-
+// FUNCTION 1 - BUILD AND PUSH BACKEND IMAGE
 def buildAndPush(
     String BACKEND_IMAGE,
     String BUILD_CONTEXT
@@ -93,20 +138,13 @@ def buildAndPush(
     def IMAGE_URI =
         "${env.ECR_REGISTRY}/${BACKEND_IMAGE}:${env.GIT_COMMIT}"
 
-    echo "======================================"
-    echo "Building Backend Image"
-    echo "======================================"
-
-    echo "Image: ${IMAGE_URI}"
+    echo "Building image:"
+    echo "${IMAGE_URI}"
 
     def image = docker.build(
         IMAGE_URI,
         "-f ${env.BACKEND_DOCKERFILE} ${BUILD_CONTEXT}"
     )
-
-    echo "======================================"
-    echo "Pushing Backend Image to ECR"
-    echo "======================================"
 
     docker.withRegistry(
         "${env.ECR_REGISTRY_URL}",
@@ -115,49 +153,85 @@ def buildAndPush(
 
         image.push()
     }
-
-    echo "Backend image pushed successfully."
 }
-
-
-def deployToECS(
-    String taskDefinitionFile,
-    String taskFamily,
-    String ecsService
+// Function 2 Promote backend image
+def promoteImage(
+    String sourceImage,
+    String targetImage
 ) {
 
+    def SOURCE_IMAGE_URI =
+        "${env.ECR_REGISTRY}/${sourceImage}:${env.GIT_COMMIT}"
+
+    def TARGET_IMAGE_URI =
+        "${env.ECR_REGISTRY}/${targetImage}:${env.GIT_COMMIT}"
+
+
+    echo "Source image:"
+    echo "${SOURCE_IMAGE_URI}"
+
+    echo "Target image:"
+    echo "${TARGET_IMAGE_URI}"
+ //pull source image from ECR
+    echo "Pulling source database image..."
+
+    docker.withRegistry(
+        "${env.ECR_REGISTRY_URL}",
+        "ecr:${env.AWS_REGION}:${env.AWS_CREDENTIALS}"
+    ) {
+
+        docker.image(
+            SOURCE_IMAGE_URI
+        ).pull()
+    }
+    // Tag image for target environment
+    echo "Tagging image for target environment..."
+
+    sh """
+        docker tag \
+        ${SOURCE_IMAGE_URI} \
+        ${TARGET_IMAGE_URI}
+    """
+ // Push target image to ECR
+     echo "Pushing target backend image..."
+
+    docker.withRegistry(
+        "${env.ECR_REGISTRY_URL}",
+        "ecr:${env.AWS_REGION}:${env.AWS_CREDENTIALS}"
+    ) {
+
+        docker.image(
+            TARGET_IMAGE_URI
+        ).push()
+    }
+    echo "Backend image promoted successfully."
+}
+ // Function 3 TASK DEFINITION FUNCTION
+def deployToECS(
+    String taskDefinitionFile,
+    
+) {
     def environment = params.Environment
     def commitId = env.GIT_COMMIT
     def region = env.AWS_REGION
-    def cluster = env.ECS_CLUSTER
-
-    echo "======================================"
-    echo "Deploying Backend to ECS"
-    echo "======================================"
-
-    echo "Environment: ${environment}"
-    echo "Commit: ${commitId}"
-    echo "Cluster: ${cluster}"
-    echo "Service: ${ecsService}"
-    echo "Task Family: ${taskFamily}"
-
+   
+    def cluster =
+        getECSCluster(environment)
+    def taskFamily =
+        getTaskFamily(environment)
+    def ecsService =
+        getECSService(environment)
+    // Replace environment
     sh """
         sed -i 's|\\\${ENV}|${environment}|g' ${taskDefinitionFile}
-
         sed -i 's|\\\${COMMIT_ID}|${commitId}|g' ${taskDefinitionFile}
     """
-
-    echo "======================================"
-    echo "Image in Task Definition"
-    echo "======================================"
+    echo "Task definition after image replacement:"
 
     sh """
         grep '"image"' ${taskDefinitionFile}
     """
-
-    echo "======================================"
-    echo "Registering ECS Task Definition"
-    echo "======================================"
+    echo "Registering ECS task definition..."
 
     def taskRevision = sh(
         script: """
@@ -170,12 +244,9 @@ def deployToECS(
         returnStdout: true
     ).trim()
 
-    echo "New Task Definition Revision: ${taskRevision}"
+    echo "Task definition revision: ${taskRevision}"
 
-    echo "======================================"
-    echo "Updating ECS Service"
-    echo "======================================"
-
+    echo "Updating ECS service..."
     sh """
         aws ecs update-service \
             --cluster ${cluster} \
@@ -183,6 +254,5 @@ def deployToECS(
             --task-definition ${taskFamily}:${taskRevision} \
             --region ${region}
     """
-
-    echo "Backend ECS service updated successfully."
+    echo "ECS deployment completed successfully."
 }

@@ -1,5 +1,5 @@
 {
-  "family": "dev-backend",
+  "family": "qa-backend",
   "containerDefinitions": [
     {
       "name": "backend",
