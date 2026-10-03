@@ -23,11 +23,17 @@ pipeline {
 
     parameters {
         choice(
-            name: 'Environment',
-            choices: ['dev', 'qa', 'uat', 'prod'],
-            description: 'Select the deployment environment'
-        )
-    }
+        name: 'Environment',
+        choices: ['dev', 'qa', 'uat', 'prod'],
+        description: 'Select the deployment environment'
+    )
+
+    string(
+        name: 'IMAGE_TAG',
+        defaultValue: '',
+        description: 'Existing DEV image tag to promote. Required for QA/UAT/PROD.'
+    )
+}
 
     stages {
 
@@ -184,11 +190,9 @@ def promoteImage(
     String sourceImage,
     String targetImage
 ) {
-    def SOURCE_IMAGE_URI =
-        "${env.ECR_REGISTRY}/${sourceImage}:${env.GIT_COMMIT}"
-
-    def TARGET_IMAGE_URI =
-        "${env.ECR_REGISTRY}/${targetImage}:${env.GIT_COMMIT}"
+    def IMAGE_TAG = params.IMAGE_TAG
+    def SOURCE_IMAGE_URI = "${env.ECR_REGISTRY}/${sourceImage}:${env.GIT_COMMIT}"
+    def TARGET_IMAGE_URI = "${env.ECR_REGISTRY}/${targetImage}:${env.GIT_COMMIT}"
 
     echo "Source image:"
     echo "${SOURCE_IMAGE_URI}"
@@ -237,7 +241,7 @@ def deployToECS(
     String ecsService
 ) {
     def environment = params.Environment
-    def commitId    = env.GIT_COMMIT
+    def commitId    = env.IMAGE_TAG
     def region      = env.AWS_REGION
     def cluster     = getECSCluster(environment)
 
