@@ -19,7 +19,7 @@
         },
         {
           "name": "MYSQL_HOST",
-          "value": "db.ecs.dev.local"
+          "value": "db.ecs.${ENV}.local"
         },
         {
           "name": "MYSQL_ROOT_PASSWORD",
