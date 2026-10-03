@@ -17,7 +17,7 @@
           "name": "BACKEND_HOST",
           "value": "backend.ecs.dev.local"
         }
-      ]
+      ],
       "logConfiguration": {
         "logDriver": "awslogs",
         "options": {
