@@ -1,5 +1,5 @@
 {
-  "family": "${ENV}-db",
+  "family": "${ENV}-frontend",
   "containerDefinitions": [
     {
       "name": "frontend",
