@@ -136,7 +136,7 @@ pipeline {
                     def ECS_SERVICE = getECSService(params.Environment)
 
                     deployToECS(
-                        './frontend/frontend-task-definition.json',
+                        './frontend/proxy-task-definition.json',
                         TASK_FAMILY,
                         ECS_SERVICE
                     )
