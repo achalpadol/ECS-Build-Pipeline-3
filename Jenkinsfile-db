@@ -126,17 +126,19 @@ pipeline {
                     params.Environment == 'dev'
                 }
             }
-            steps {
+             steps {
                 script {
+                    def TASK_FAMILY = getTaskFamily(params.Environment)
+                    def ECS_SERVICE = getECSService(params.Environment)
+
                     deployToECS(
-                        './db/db-task-definition.json'
-                        getTaskFamily(params.Environment),
-                        getECSService(params.Environment)
-                    )
-                }
-            }
+                    './db/db-task-definition.json',
+                    TASK_FAMILY,
+                    ECS_SERVICE
+            )
         }
     }
+}
 
     // POST
     post {
@@ -223,14 +225,15 @@ def promoteImage(
 }
 
 // FUNCTION 3 - TASK DEFINITION FUNCTION
-def deployToECS(String taskDefinitionFile)
-{
+def deployToECS(
+    String taskDefinitionFile,
+    String taskFamily,
+    String ecsService
+) {
     def environment = params.Environment
     def commitId    = env.GIT_COMMIT
     def region      = env.AWS_REGION
     def cluster     = getECSCluster(environment)
-    def taskFamily  = getTaskFamily(environment)
-    def ecsService  = getECSService(environment)
 
     // Replace environment
     sh """
@@ -239,6 +242,7 @@ def deployToECS(String taskDefinitionFile)
     """
 
     echo "Task definition after image replacement:"
+
     sh """
         grep '"image"' ${taskDefinitionFile}
     """
@@ -269,7 +273,6 @@ def deployToECS(String taskDefinitionFile)
 
     echo "ECS deployment completed successfully."
 }
-
 // FUNCTION 4 - GET ECS CLUSTER
 def getECSCluster(String environment)
 {
