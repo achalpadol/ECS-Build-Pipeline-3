@@ -1,5 +1,5 @@
 {
-  "family": "qa-frontend",
+  "family": "dev-frontend",
   "containerDefinitions": [
     {
       "name": "frontend",
