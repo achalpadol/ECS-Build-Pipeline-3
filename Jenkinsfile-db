@@ -1,5 +1,6 @@
 pipeline {
     agent any
+
     environment {
         AWS_REGION       = 'ap-south-1'
         AWS_ACCOUNT_ID   = '552940445807'
@@ -19,6 +20,7 @@ pipeline {
         BUILD_CONTEXT = './db'
         DB_DOCKERFILE = './db/Dockerfile'
     }
+
     parameters {
         choice(
             name: 'Environment',
@@ -26,16 +28,18 @@ pipeline {
             description: 'Select the deployment environment'
         )
     }
-    stage('Get ECS Cluster') {
-        steps {
-            script {
-                env.ECS_CLUSTER = getECSCluster(params.Environment)
-                echo "ECS_CLUSTER = ${env.ECS_CLUSTER}"
-            }
-        }
-    }
 
     stages {
+
+        stage('Get ECS Cluster') {
+            steps {
+                script {
+                    env.ECS_CLUSTER = getECSCluster(params.Environment)
+                    echo "ECS_CLUSTER = ${env.ECS_CLUSTER}"
+                }
+            }
+        }
+
         // DEV - BUILD & PUSH
         stage('Dev - Build & Push DB') {
             when {
@@ -132,13 +136,14 @@ pipeline {
                     def ECS_SERVICE = getECSService(params.Environment)
 
                     deployToECS(
-                    './db/db-task-definition.json',
-                    TASK_FAMILY,
-                    ECS_SERVICE
+                        './db/db-task-definition.json',
+                        TASK_FAMILY,
+                        ECS_SERVICE
                     )
                 }
             }
         }
+    }
 
     // POST
     post {
@@ -147,7 +152,7 @@ pipeline {
         }
     }
 }
-}
+
 
 // FUNCTION 1 - BUILD AND PUSH DB IMAGE
 def buildAndPush(
