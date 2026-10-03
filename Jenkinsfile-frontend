@@ -124,15 +124,9 @@ pipeline {
             steps {
                 script {
                     deployToECS(
-<<<<<<< HEAD
                         './frontend/proxy-task-definition.json',
-                        'dev-frontend',
-                        'dev-frontend-service'
-=======
-                        './frontend/frontend-task-definition.json',
-                        getTaskFamily(environment)
-                        getECSService(environment)
->>>>>>> f73fa98 (file added)
+                        getTaskFamily(params.Environment),
+                        getECSService(params.Environment)
                     )
                 }
             }
@@ -259,12 +253,8 @@ def deployToECS(String taskDefinitionFile)
             --task-definition ${taskFamily}:${taskRevision} \
             --region ${region}
     """
-<<<<<<< HEAD
 
     echo "Frontend ECS service updated successfully."
-}
-=======
-    echo "ECS deployment completed successfully."
 }
 // FUNCTION 4 - GET ECS CLUSTER
 def getECSCluster(String environment)
@@ -299,4 +289,4 @@ def getECSService(String environment)
     ]
     return services[environment]
 }
->>>>>>> f73fa98 (file added)
+
