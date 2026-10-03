@@ -15,7 +15,7 @@
       "environment": [
         {
           "name": "BACKEND_HOST",
-          "value": "app1-backend.ecs.employee.local"
+          "value": "backend.ecs.dev.local"
         }
       ]
       "logConfiguration": {
