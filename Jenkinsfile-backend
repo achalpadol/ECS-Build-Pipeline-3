@@ -1,5 +1,6 @@
 pipeline {
     agent any
+
     environment {
         AWS_REGION       = 'ap-south-1'
         AWS_ACCOUNT_ID   = '552940445807'
@@ -16,9 +17,10 @@ pipeline {
         AWS_CREDENTIALS = 'aws'
 
         // Backend Docker build context
-        BUILD_CONTEXT = './backend'
+        BUILD_CONTEXT   = './backend'
         BACKEND_DOCKERFILE = './backend/Dockerfile'
     }
+
     parameters {
         choice(
             name: 'Environment',
@@ -26,16 +28,18 @@ pipeline {
             description: 'Select the deployment environment'
         )
     }
-    stage('Get ECS Cluster') {
-        steps {
-            script {
-                env.ECS_CLUSTER = getECSCluster(params.Environment)
-                echo "ECS_CLUSTER = ${env.ECS_CLUSTER}"
-            }
-        }
-    }
 
     stages {
+
+        stage('Get ECS Cluster') {
+            steps {
+                script {
+                    env.ECS_CLUSTER = getECSCluster(params.Environment)
+                    echo "ECS_CLUSTER = ${env.ECS_CLUSTER}"
+                }
+            }
+        }
+
         // DEV - BUILD & PUSH
         stage('Dev - Build & Push Backend') {
             when {
@@ -128,8 +132,13 @@ pipeline {
             }
             steps {
                 script {
+                    def TASK_FAMILY = getTaskFamily(params.Environment)
+                    def ECS_SERVICE = getECSService(params.Environment)
+
                     deployToECS(
-                        './backend/backend-task-definition.json'
+                        './backend/backend-task-definition.json',
+                        TASK_FAMILY,
+                        ECS_SERVICE
                     )
                 }
             }
@@ -143,6 +152,7 @@ pipeline {
         }
     }
 }
+
 
 // FUNCTION 1 - BUILD AND PUSH BACKEND IMAGE
 def buildAndPush(
@@ -169,6 +179,7 @@ def buildAndPush(
     }
 }
 
+
 // FUNCTION 2 - PROMOTE BACKEND IMAGE
 def promoteImage(
     String sourceImage,
@@ -187,7 +198,7 @@ def promoteImage(
     echo "${TARGET_IMAGE_URI}"
 
     // Pull source image from ECR
-    echo "Pulling source backend image..."
+    echo "Pulling source Backend image..."
 
     docker.withRegistry(
         "${env.ECR_REGISTRY_URL}",
@@ -200,6 +211,7 @@ def promoteImage(
 
     // Tag image for target environment
     echo "Tagging image for target environment..."
+
     sh """
         docker tag \
         ${SOURCE_IMAGE_URI} \
@@ -207,7 +219,8 @@ def promoteImage(
     """
 
     // Push target image to ECR
-    echo "Pushing target backend image..."
+    echo "Pushing target Backend image..."
+
     docker.withRegistry(
         "${env.ECR_REGISTRY_URL}",
         "ecr:${env.AWS_REGION}:${env.AWS_CREDENTIALS}"
@@ -220,15 +233,17 @@ def promoteImage(
     echo "Backend image promoted successfully."
 }
 
+
 // FUNCTION 3 - TASK DEFINITION FUNCTION
-def deployToECS(String taskDefinitionFile)
-{
+def deployToECS(
+    String taskDefinitionFile,
+    String taskFamily,
+    String ecsService
+) {
     def environment = params.Environment
     def commitId    = env.GIT_COMMIT
     def region      = env.AWS_REGION
     def cluster     = getECSCluster(environment)
-    def taskFamily  = getTaskFamily(environment)
-    def ecsService  = getECSService(environment)
 
     // Replace environment
     sh """
@@ -237,6 +252,7 @@ def deployToECS(String taskDefinitionFile)
     """
 
     echo "Task definition after image replacement:"
+
     sh """
         grep '"image"' ${taskDefinitionFile}
     """
@@ -268,6 +284,7 @@ def deployToECS(String taskDefinitionFile)
     echo "ECS deployment completed successfully."
 }
 
+
 // FUNCTION 4 - GET ECS CLUSTER
 def getECSCluster(String environment)
 {
@@ -281,6 +298,7 @@ def getECSCluster(String environment)
     return clusters[environment]
 }
 
+
 // FUNCTION 5 - GET TASK FAMILY
 def getTaskFamily(String environment)
 {
@@ -293,6 +311,7 @@ def getTaskFamily(String environment)
 
     return taskFamilies[environment]
 }
+
 
 // FUNCTION 6 - GET ECS SERVICE
 def getECSService(String environment)
