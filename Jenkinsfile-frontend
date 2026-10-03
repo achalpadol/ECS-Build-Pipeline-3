@@ -192,6 +192,7 @@ def promoteImage(
 ) {
     def IMAGE_TAG = params.IMAGE_TAG
     def SOURCE_IMAGE_URI = "${env.ECR_REGISTRY}/${sourceImage}:${IMAGE_TAG}"
+
     def TARGET_IMAGE_URI = "${env.ECR_REGISTRY}/${targetImage}:${IMAGE_TAG}"
 
     echo "Source image:"
@@ -248,7 +249,8 @@ def deployToECS(
     def region      = env.AWS_REGION
     def cluster     = getECSCluster(environment)
 
-    def taskDefinitionTemp = "${env.WORKSPACE}/task-definition-${environment}.json"
+    def taskDefinitionTemp =
+        "${env.WORKSPACE}/task-definition-${environment}.json"
 
     echo "Environment = ${environment}"
     echo "Image Tag   = ${imageTag}"
@@ -264,16 +266,11 @@ def deployToECS(
         sed -i 's|\\\${COMMIT_ID}|${imageTag}|g' ${taskDefinitionTemp}
     """
 
-    echo "Database host after replacement:"
+    echo "Task definition after replacement:"
 
     sh """
-        grep -A1 '"name": "MYSQL_HOST"' ${taskDefinitionTemp}
-    """
-
-    echo "Image after replacement:"
-
-    sh """
-        grep '"image"' ${taskDefinitionTemp}
+        grep -E '"family"|"image"|"BACKEND_HOST"' \
+        ${taskDefinitionTemp}
     """
 
     echo "Registering ECS task definition..."
@@ -303,6 +300,8 @@ def deployToECS(
 
     echo "ECS deployment completed successfully."
 }
+
+
 // FUNCTION 4 - GET ECS CLUSTER
 def getECSCluster(String environment)
 {
