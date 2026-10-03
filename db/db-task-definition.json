@@ -31,7 +31,7 @@
       }
     }
   ],
-  "family": "qa-db",
+  "family": "dev-db",
   "executionRoleArn": "arn:aws:iam::552940445807:role/ecsTaskExecutionRole",
   "networkMode": "awsvpc",
   "requiresCompatibilities": [
