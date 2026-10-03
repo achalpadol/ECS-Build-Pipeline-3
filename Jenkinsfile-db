@@ -126,7 +126,7 @@ pipeline {
                     params.Environment == 'dev'
                 }
             }
-             steps {
+            steps {
                 script {
                     def TASK_FAMILY = getTaskFamily(params.Environment)
                     def ECS_SERVICE = getECSService(params.Environment)
@@ -135,10 +135,10 @@ pipeline {
                     './db/db-task-definition.json',
                     TASK_FAMILY,
                     ECS_SERVICE
-            )
+                    )
+                }
+            }
         }
-    }
-}
 
     // POST
     post {
@@ -146,6 +146,7 @@ pipeline {
             deleteDir()
         }
     }
+}
 }
 
 // FUNCTION 1 - BUILD AND PUSH DB IMAGE
