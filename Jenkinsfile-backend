@@ -64,7 +64,7 @@ pipeline {
         }
 
         // QA - PROMOTE IMAGE
-        stage('QA - Promote Backend Image') {
+        stage('Promote Database Dev to QA') {
             when {
                 expression {
                     params.Environment == 'qa'
@@ -81,7 +81,7 @@ pipeline {
         }
 
         // UAT - PROMOTE IMAGE
-        stage('UAT - Promote Backend Image') {
+        stage('Promote Database QA to UAT') {
             when {
                 expression {
                     params.Environment == 'uat'
@@ -90,7 +90,7 @@ pipeline {
             steps {
                 script {
                     promoteImage(
-                        "${env.BACKEND_IMAGE_DEV}",
+                        "${env.BACKEND_IMAGE_QA}",
                         "${env.BACKEND_IMAGE_UAT}"
                     )
                 }
@@ -113,7 +113,7 @@ pipeline {
         }
 
         // PROD - PROMOTE IMAGE
-        stage('PROD - Promote Backend Image') {
+        stage('Promote Database UAT to PROD') {
             when {
                 expression {
                     params.Environment == 'prod'
@@ -122,7 +122,7 @@ pipeline {
             steps {
                 script {
                     promoteImage(
-                        "${env.BACKEND_IMAGE_DEV}",
+                        "${env.BACKEND_IMAGE_UAT}",
                         "${env.BACKEND_IMAGE_PROD}"
                     )
                 }
@@ -236,7 +236,6 @@ def promoteImage(
 
     echo "Backend image promoted successfully."
 }
-
 
 // FUNCTION 3 - TASK DEFINITION FUNCTION
 def deployToECS(

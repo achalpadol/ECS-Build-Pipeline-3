@@ -1,6 +1,5 @@
 pipeline {
     agent any
-
     environment {
         AWS_REGION       = 'ap-south-1'
         AWS_ACCOUNT_ID   = '552940445807'
@@ -64,7 +63,7 @@ pipeline {
         }
 
         // QA - PROMOTE IMAGE
-        stage('QA - Promote DB Image') {
+        stage('Promote Database Dev to QA') {
             when {
                 expression {
                     params.Environment == 'qa'
@@ -81,7 +80,7 @@ pipeline {
         }
 
         // UAT - PROMOTE IMAGE
-        stage('UAT - Promote DB Image') {
+        stage('Promote Database QA to UAT') {
             when {
                 expression {
                     params.Environment == 'uat'
@@ -90,7 +89,7 @@ pipeline {
             steps {
                 script {
                     promoteImage(
-                        "${env.DB_IMAGE_DEV}",
+                        "${env.DB_IMAGE_QA}",
                         "${env.DB_IMAGE_UAT}"
                     )
                 }
@@ -113,7 +112,7 @@ pipeline {
         }
 
         // PROD - PROMOTE IMAGE
-        stage('PROD - Promote DB Image') {
+        stage('Promote Database UAT to PROD') {
             when {
                 expression {
                     params.Environment == 'prod'
@@ -122,7 +121,7 @@ pipeline {
             steps {
                 script {
                     promoteImage(
-                        "${env.DB_IMAGE_DEV}",
+                        "${env.DB_IMAGE_UAT}",
                         "${env.DB_IMAGE_PROD}"
                     )
                 }
@@ -161,10 +160,8 @@ pipeline {
 
 
 // FUNCTION 1 - BUILD AND PUSH DB IMAGE
-def buildAndPush(
-    String DB_IMAGE,
-    String BUILD_CONTEXT
-) {
+def buildAndPush(String DB_IMAGE, String BUILD_CONTEXT) 
+{
     def IMAGE_URI =
         "${env.ECR_REGISTRY}/${DB_IMAGE}:${env.GIT_COMMIT}"
 
@@ -186,13 +183,11 @@ def buildAndPush(
 }
 
 // FUNCTION 2 - PROMOTE DB IMAGE
-def promoteImage(
-    String sourceImage,
-    String targetImage
-) {
+def promoteImage(String sourceImage, String targetImage)
+ {
     def IMAGE_TAG = params.IMAGE_TAG
-    def SOURCE_IMAGE_URI = "${env.ECR_REGISTRY}/${sourceImage}:${env.GIT_COMMIT}"
-    def TARGET_IMAGE_URI = "${env.ECR_REGISTRY}/${targetImage}:${env.GIT_COMMIT}"
+    def SOURCE_IMAGE_URI = "${env.ECR_REGISTRY}/${sourceImage}:${IMAGE_TAG}"
+    def TARGET_IMAGE_URI = "${env.ECR_REGISTRY}/${targetImage}:${IMAGE_TAG}"
 
     echo "Source image:"
     echo "${SOURCE_IMAGE_URI}"

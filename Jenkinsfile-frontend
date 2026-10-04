@@ -63,7 +63,7 @@ pipeline {
         }
 
         // QA - PROMOTE IMAGE
-        stage('QA - Promote Frontend Image') {
+        stage('Promote Database Dev to QA') {
             when {
                 expression {
                     params.Environment == 'qa'
@@ -80,7 +80,7 @@ pipeline {
         }
 
         // UAT - PROMOTE IMAGE
-        stage('UAT - Promote Frontend Image') {
+        stage('Promote Database QA to UAT') {
             when {
                 expression {
                     params.Environment == 'uat'
@@ -89,7 +89,7 @@ pipeline {
             steps {
                 script {
                     promoteImage(
-                        "${env.FRONTEND_IMAGE_DEV}",
+                        "${env.FRONTEND_IMAGE_QA}",
                         "${env.FRONTEND_IMAGE_UAT}"
                     )
                 }
@@ -112,7 +112,7 @@ pipeline {
         }
 
         // PROD - PROMOTE IMAGE
-        stage('PROD - Promote Frontend Image') {
+        stage('Promote Database UAT to PROD') {
             when {
                 expression {
                     params.Environment == 'prod'
@@ -121,7 +121,7 @@ pipeline {
             steps {
                 script {
                     promoteImage(
-                        "${env.FRONTEND_IMAGE_DEV}",
+                        "${env.FRONTEND_IMAGE_UAT}",
                         "${env.FRONTEND_IMAGE_PROD}"
                     )
                 }
