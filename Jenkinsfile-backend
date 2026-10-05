@@ -64,7 +64,7 @@ pipeline {
         }
 
         // QA - PROMOTE IMAGE
-        stage('Promote Database Dev to QA') {
+        stage('Promote Backend Dev to QA') {
             when {
                 expression {
                     params.Environment == 'qa'
@@ -81,7 +81,7 @@ pipeline {
         }
 
         // UAT - PROMOTE IMAGE
-        stage('Promote Database QA to UAT') {
+        stage('Promote Backend QA to UAT') {
             when {
                 expression {
                     params.Environment == 'uat'
@@ -113,7 +113,7 @@ pipeline {
         }
 
         // PROD - PROMOTE IMAGE
-        stage('Promote Database UAT to PROD') {
+        stage('Promote Backend UAT to PROD') {
             when {
                 expression {
                     params.Environment == 'prod'
@@ -133,7 +133,7 @@ pipeline {
         stage('Deploy Backend') {
             when {
                 expression {
-                    params.Environment == 'qa'
+                    params.Environment == 'uat'
                 }
             }
             steps {

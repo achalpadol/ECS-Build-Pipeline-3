@@ -132,7 +132,7 @@ pipeline {
         stage('Deploy DB') {
             when {
                 expression {
-                    params.Environment == 'qa'
+                    params.Environment == 'uat'
                 }
             }
             steps {
