@@ -14,7 +14,7 @@ pipeline {
 
         // AWS credentials
         AWS_CREDENTIALS = 'aws'
-
+        
         // DB Docker build context
         BUILD_CONTEXT = './db'
         DB_DOCKERFILE = './db/Dockerfile'
@@ -236,7 +236,7 @@ def deployToECS(
     String ecsService
 ) {
     def environment = params.Environment
-    def commitId    = env.IMAGE_TAG
+    def imageTag    = params.IMAGE_TAG ?: env.GIT_COMMIT
     def region      = env.AWS_REGION
     def cluster     = getECSCluster(environment)
 
