@@ -133,7 +133,7 @@ pipeline {
         stage('Deploy Backend') {
             when {
                 expression {
-                    params.Environment == 'prod'
+                    params.Environment in ['dev', 'qa', 'uat', 'prod']
                 }
             }
             steps {
