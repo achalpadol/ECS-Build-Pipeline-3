@@ -183,8 +183,6 @@ def buildAndPush(
         image.push()
     }
 }
-
-
 // FUNCTION 2 - PROMOTE FRONTEND IMAGE
 def promoteImage(
     String sourceImage,

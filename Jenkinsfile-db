@@ -5,37 +5,30 @@ pipeline {
         AWS_ACCOUNT_ID   = '552940445807'
         ECR_REGISTRY     = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
         ECR_REGISTRY_URL = "https://${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
-
         // DB images
         DB_IMAGE_DEV  = 'app3-db-dev'
         DB_IMAGE_QA   = 'app3-db-qa'
         DB_IMAGE_UAT  = 'app3-db-uat'
         DB_IMAGE_PROD = 'app3-db-prod'
-
         // AWS credentials
         AWS_CREDENTIALS = 'aws'
-        
         // DB Docker build context
         BUILD_CONTEXT = './db'
         DB_DOCKERFILE = './db/Dockerfile'
     }
-
     parameters {
         choice(
         name: 'Environment',
         choices: ['dev', 'qa', 'uat', 'prod'],
         description: 'Select the deployment environment'
     )
-
     string(
         name: 'IMAGE_TAG',
         defaultValue: '',
         description: 'Existing DEV image tag to promote. Required for QA/UAT/PROD.'
     )
 }
-
     stages {
-
         stage('Get ECS Cluster') {
             steps {
                 script {
@@ -44,7 +37,6 @@ pipeline {
                 }
             }
         }
-
         // DEV - BUILD & PUSH
         stage('Dev - Build & Push DB') {
             when {
@@ -61,7 +53,6 @@ pipeline {
                 }
             }
         }
-
         // QA - PROMOTE IMAGE
         stage('Promote Database Dev to QA') {
             when {
@@ -78,7 +69,6 @@ pipeline {
                 }
             }
         }
-
         // UAT - PROMOTE IMAGE
         stage('Promote Database QA to UAT') {
             when {
@@ -95,7 +85,6 @@ pipeline {
                 }
             }
         }
-
         // PROD APPROVAL
         stage('Production Approval') {
             when {
@@ -110,7 +99,6 @@ pipeline {
                 )
             }
         }
-
         // PROD - PROMOTE IMAGE
         stage('Promote Database UAT to PROD') {
             when {
@@ -127,7 +115,6 @@ pipeline {
                 }
             }
         }
-
         // DEPLOY DB
         stage('Deploy DB') {
             when {
@@ -149,7 +136,6 @@ pipeline {
             }
         }
     }
-
     // POST
     post {
         always {
@@ -157,8 +143,6 @@ pipeline {
         }
     }
 }
-
-
 // FUNCTION 1 - BUILD AND PUSH DB IMAGE
 def buildAndPush(String DB_IMAGE, String BUILD_CONTEXT) 
 {
@@ -181,7 +165,6 @@ def buildAndPush(String DB_IMAGE, String BUILD_CONTEXT)
         image.push()
     }
 }
-
 // FUNCTION 2 - PROMOTE DB IMAGE
 def promoteImage(String sourceImage, String targetImage)
  {
@@ -206,7 +189,6 @@ def promoteImage(String sourceImage, String targetImage)
             SOURCE_IMAGE_URI
         ).pull()
     }
-
     // Tag image for target environment
     echo "Tagging image for target environment..."
     sh """
@@ -214,7 +196,6 @@ def promoteImage(String sourceImage, String targetImage)
         ${SOURCE_IMAGE_URI} \
         ${TARGET_IMAGE_URI}
     """
-
     // Push target image to ECR
     echo "Pushing target DB image..."
     docker.withRegistry(
@@ -228,7 +209,6 @@ def promoteImage(String sourceImage, String targetImage)
 
     echo "DB image promoted successfully."
 }
-
 // FUNCTION 3 - TASK DEFINITION FUNCTION
 def deployToECS(
     String taskDefinitionFile,
@@ -239,11 +219,10 @@ def deployToECS(
     def imageTag    = params.IMAGE_TAG ?: env.GIT_COMMIT
     def region      = env.AWS_REGION
     def cluster     = getECSCluster(environment)
-
     // Replace environment
     sh """
         sed -i 's|\\\${ENV}|${environment}|g' ${taskDefinitionFile}
-        sed -i 's|\\\${COMMIT_ID}|${commitId}|g' ${taskDefinitionFile}
+        sed -i 's|\\\${COMMIT_ID}|${imageTag}|g' ${taskDefinitionFile}
     """
 
     echo "Task definition after image replacement:"
@@ -290,7 +269,6 @@ def getECSCluster(String environment)
 
     return clusters[environment]
 }
-
 // FUNCTION 5 - GET TASK FAMILY
 def getTaskFamily(String environment)
 {
@@ -303,7 +281,6 @@ def getTaskFamily(String environment)
 
     return taskFamilies[environment]
 }
-
 // FUNCTION 6 - GET ECS SERVICE
 def getECSService(String environment)
 {
